@@ -222,12 +222,13 @@ function finish(title, content, allOk) {
     $done();
     return;
   }
-  $done({
-    title: title,
-    content: content,
-    icon: allOk ? "checkmark.shield" : "exclamationmark.shield",
-    "icon-color": allOk ? "#34C759" : "#FF3B30",
-  });
+  var result = { title: title, content: content };
+  // 面板标题已有状态图标；Mac 上额外的 SF Symbol 会占据卡片空间。
+  if (!isPanel) {
+    result.icon = allOk ? "checkmark.shield" : "exclamationmark.shield";
+    result["icon-color"] = allOk ? "#34C759" : "#FF3B30";
+  }
+  $done(result);
 }
 
 /* ---------- 业务逻辑 ---------- */
@@ -372,10 +373,11 @@ function panelLine(index, ctx, detailed, single) {
   if (!st.applied) return head + "❌ 当前出口未加白 · 白名单 " + count;
   if (!detailed) return single ? "白名单占用 " + count : head + "已加白 · 占用 " + count;
 
-  var lines = [head + "白名单 " + count];
-  st.whitelist.forEach(function (ip) {
-    lines.push("  " + ip + (sameC24(ip, st.currentIp) ? " ← 当前出口" : ""));
-  });
+  // Mac 面板高度有限；每行放两个完整 IP，当前出口已在首行单独显示。
+  var lines = single ? [] : [head + "白名单 " + count];
+  for (var i = 0; i < st.whitelist.length; i += 2) {
+    lines.push("  " + st.whitelist.slice(i, i + 2).join(" · "));
+  }
   return lines.join("\n");
 }
 
@@ -392,11 +394,16 @@ function panelDisplay(results, okCount, exitIp) {
   // 首次点击显示明细；再次点击切回简要。两次点击均已执行 POST 加白。
   // 自动刷新总是显示简要，并重置下一次手动点击的显示状态。
   var detailed = !isAutoPanel && storeRead(PANEL_DETAIL_KEY) !== "1";
+  if (detailed && results.length === 1) {
+    var only = results[0].st;
+    if (!only.error && only.enabled !== false && only.applied) {
+      lines[0] += " · 白名单 " + only.whitelist.length + "/" + only.limit;
+    }
+  }
   results.forEach(function (ctx, index) {
     lines.push(panelLine(index, ctx, detailed, results.length === 1));
   });
-  lines.push("更新 " + panelTime());
-  if (detailed) lines.push("再点刷新显示简要");
+  if (!detailed) lines.push("更新 " + panelTime());
   storeWrite(detailed ? "1" : "0", PANEL_DETAIL_KEY);
   finish(title, lines.join("\n"), allOk);
 }
