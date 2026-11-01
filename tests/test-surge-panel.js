@@ -24,7 +24,7 @@ function status(count = 3, enabled = true) {
   };
 }
 
-function run({ tokens = 'pgnfw_one', trigger, event, panel = false, responses = {}, storage = {} } = {}) {
+function run({ tokens = 'pgnfw_one', trigger, event, panel = false, system = 'iOS', responses = {}, storage = {} } = {}) {
   const calls = [];
   const notifications = [];
   const writes = [];
@@ -38,7 +38,7 @@ function run({ tokens = 'pgnfw_one', trigger, event, panel = false, responses = 
   };
   const context = {
     $argument: 'tokens=' + tokens,
-    $environment: { 'surge-version': '6' },
+    $environment: { 'surge-version': '6', system },
     $httpClient: {
       get(options, callback) { http('GET', options, callback); },
       post(options, callback) { http('POST', options, callback); },
@@ -68,6 +68,21 @@ test('automatic panel refresh queries one token without adding or notifying', as
   assert.doesNotMatch(result.content, /198\.51\.100|📌|pgnfw_/);
   assert.equal(notifications.length, 0);
   assert.deepEqual(writes, ['po0_fw_panel_detail']);
+});
+
+test('Mac summary emits five useful lines', async () => {
+  const { result, calls } = await run({
+    system: 'macOS', trigger: 'auto-interval', panel: true,
+    responses: { pgnfw_one: { status: 200, body: status(5) } },
+  });
+  assert.deepEqual(calls.map((call) => call.method), ['GET']);
+  assert.deepEqual(result.content.split('\n').slice(0, 4), [
+    '出口 203.0.113.0/24',
+    '防火墙 已启用',
+    '白名单占用 5/5',
+    '手动刷新：加白并看明细',
+  ]);
+  assert.equal(result.content.split('\n').length, 5);
 });
 
 test('panel button adds current IP and shows whitelist detail', async () => {
