@@ -24,23 +24,23 @@ Token 在 po0 控制台机器详情页「防火墙」卡片获取，形如 `pgnf
 | OpenWrt / Kwrt 软路由 | 本仓库 shell 脚本 | cron + hotplug WAN 重连秒级触发 |
 | Windows | 本仓库 PowerShell | 计划任务：10 分钟 + 网络事件 |
 | 安卓 | [android/](android/)：MacroDroid / HTTP Shortcuts / Termux | 网络切换 + 定时 |
-| Surge | [自定义定时模块](surge/po0-firewall-whitelist.sgmodule) | network-changed 即时 + 用户自定义 cron |
+| Surge | [自定义定时模块](surge/po0-firewall-whitelist.sgmodule) | network-changed 即时 + 用户填写分钟数 |
 | 其他 iOS/Mac 代理客户端 | Loon / Stash / QX / Shadowrocket / Egern（[原版一键安装页](https://po0fw.uuuz.de/)） | network-changed 即时 + 10 分钟 cron |
 | iOS 无代理 App | [ios/](ios/)：快捷指令自动化 | Wi-Fi 切换触发 |
 
 ## iOS / Mac 代理客户端模块
 
-Surge / Loon / Stash / Quantumult X / Shadowrocket / Egern 六客户端脚本模块（共享环境兼容层），带面板显示、蜂窝 📶 标记和 network-changed 即时触发。Surge 的 cron 定时由用户设置，其他客户端沿用原版的 10 分钟设置。
+Surge / Loon / Stash / Quantumult X / Shadowrocket / Egern 六客户端脚本模块（共享环境兼容层），带面板显示、蜂窝 📶 标记和 network-changed 即时触发。Surge 的定时间隔由用户填写分钟数字，其他客户端沿用原版的 10 分钟设置。
 
 👉 **Surge 自定义模块下载：<https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/main/surge/po0-firewall-whitelist.sgmodule>**
 
-在 Surge 中进入「模块 → po0 防火墙自动加白 → 编辑参数」，填写 `tokens` 和必填的 `cron_schedule`。`cron_schedule` 是五段 cron 表达式，例如 `*/15 * * * *` 表示每 15 分钟，`0 * * * *` 表示每小时整点，`0 8 * * *` 表示每天 08:00。模块中也写有修改时间的路径。安装时请使用上面的本仓库链接；原版一键安装页仍指向上游模块。
+在 Surge 中进入「模块 → po0 防火墙自动加白 → 编辑参数」，填写 `tokens` 和必填的 `interval_minutes`。时间只填数字，例如 `15` 表示每 15 分钟，`60` 表示每小时。可选值：`1`、`2`、`3`、`4`、`5`、`6`、`10`、`12`、`15`、`20`、`30`、`60`。这些数字都能整除 60，可保证跨整点的间隔一致。模块中也写有修改时间的路径。安装时请使用上面的本仓库链接；原版一键安装页仍指向上游模块。
 
 其他客户端的原版一键安装页：<https://po0fw.uuuz.de/>
 
 | 客户端 | 载体 | token 配置 |
 |---|---|---|
-| Surge | `surge/po0-firewall-whitelist.sgmodule` | 模块参数 `tokens`、`cron_schedule` |
+| Surge | `surge/po0-firewall-whitelist.sgmodule` | 模块参数 `tokens`、`interval_minutes` |
 | Loon | `loon/po0-firewall-whitelist.plugin` | 插件设置 `API tokens` |
 | Stash | `stash/po0-firewall-whitelist.stoverride` | 覆写内 `argument: tokens=` |
 | Quantumult X | `quantumultx/po0-firewall-whitelist.snippet` | BoxJs key `po0fw_tokens` 或脚本内 `INLINE_TOKENS` |
@@ -105,7 +105,7 @@ po0fw pgnfw_xxx,pgnfw_yyy@0    # 临时指定 token；@0 = 固定 0 号槽位
 
 **IPv6？** po0 防火墙按 IPv4 /24 加白，脚本强制 `-4`。
 
-**白名单满了？** 服务端按写入时间 FIFO 淘汰，被挤出的设备会在下次定时或网络切换触发时自动补回；使用 Surge 自定义模块时，等待时间取决于你设置的 `cron_schedule`。
+**白名单满了？** 服务端按写入时间 FIFO 淘汰，被挤出的设备会在下次定时或网络切换触发时自动补回；使用 Surge 自定义模块时，等待时间取决于你设置的 `interval_minutes`。
 
 ## License
 
