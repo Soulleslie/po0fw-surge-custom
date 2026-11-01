@@ -373,8 +373,14 @@ function panelLine(index, ctx, detailed, single) {
   if (!st.applied) return head + "❌ 当前出口未加白 · 白名单 " + count;
   if (!detailed) return single ? "白名单占用 " + count : head + "已加白 · 占用 " + count;
 
-  // Mac 面板高度有限；每行放两个完整 IP，当前出口已在首行单独显示。
-  var lines = single ? [] : [head + "白名单 " + count];
+  // 单 token 的 Mac 面板宽度较窄；完整 IP 各占一行，避免行尾被截断。
+  // 详细模式不再重复显示出口和占用行，让最多 5 条白名单直接可见。
+  if (single) {
+    return st.whitelist.map(function (ip) {
+      return ip + (sameC24(ip, st.currentIp) ? " ←" : "");
+    }).join("\n");
+  }
+  var lines = [head + "白名单 " + count];
   for (var i = 0; i < st.whitelist.length; i += 2) {
     lines.push("  " + st.whitelist.slice(i, i + 2).join(" · "));
   }
@@ -396,9 +402,7 @@ function panelDisplay(results, okCount, exitIp) {
   var detailed = !isAutoPanel && storeRead(PANEL_DETAIL_KEY) !== "1";
   if (detailed && results.length === 1) {
     var only = results[0].st;
-    if (!only.error && only.enabled !== false && only.applied) {
-      lines[0] += " · 白名单 " + only.whitelist.length + "/" + only.limit;
-    }
+    if (!only.error && only.enabled !== false && only.applied) lines = [];
   }
   results.forEach(function (ctx, index) {
     lines.push(panelLine(index, ctx, detailed, results.length === 1));
