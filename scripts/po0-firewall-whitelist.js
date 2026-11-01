@@ -5,6 +5,7 @@
  *
  * cron / 网络事件 / 面板手动刷新：POST /api/firewall/<token>/add，
  * 面板自动刷新：GET /api/firewall/<token>，只查询状态，不写入白名单。
+ * 面板手动刷新每次都加白，同时在完整白名单与简要状态间切换。
  * POST 把"当前请求源 IP"加入白名单，并回显
  *   {enabled, whitelist:[{ip,slot}], limit, currentIp}。token 走 URL 路径，无需
  *   Authorization 头。服务端对已在白名单的 IP 做幂等处理（重复请求不
@@ -39,6 +40,7 @@ var INLINE_TOKENS = "";
 var API_BASE = "https://124.221.69.228/api/firewall/"; // + <token> [+ "/add"]
 var STORE_PREFIX = "po0_fw_";
 var TOKENS_KEY = "po0fw_tokens";
+var PANEL_DETAIL_KEY = STORE_PREFIX + "panel_detail";
 var HIST_WINDOW_MS = 24 * 3600 * 1000; // 📶 标记的记账窗口
 
 /* ---------- 环境兼容层 ---------- */
@@ -386,11 +388,15 @@ function panelDisplay(results, okCount, exitIp) {
     "/" +
     results.length;
   var lines = ["出口 " + (exitIp === "?" ? "未知" : exitIp)];
-  var detailed = !isAutoPanel; // 面板按钮保留 POST 加白，并显示完整白名单
+  // 首次点击显示明细；再次点击切回简要。两次点击均已执行 POST 加白。
+  // 自动刷新总是显示简要，并重置下一次手动点击的显示状态。
+  var detailed = !isAutoPanel && storeRead(PANEL_DETAIL_KEY) !== "1";
   results.forEach(function (ctx, index) {
     lines.push(panelLine(index, ctx, detailed, results.length === 1));
   });
   lines.push("更新 " + panelTime());
+  if (detailed) lines.push("再点刷新显示简要");
+  storeWrite(detailed ? "1" : "0", PANEL_DETAIL_KEY);
   finish(title, lines.join("\n"), allOk);
 }
 
