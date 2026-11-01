@@ -77,23 +77,23 @@ test('panel button adds current IP and shows whitelist detail', async () => {
   assert.deepEqual(calls.map((call) => call.method), ['POST']);
   assert.match(calls[0].options.url, /\/api\/firewall\/pgnfw_one\/add\?slot=0$/);
   assert.equal(result.title, 'po0 防火墙token ✅ 1/1');
-  assert.match(result.content, /出口 203\.0\.113\.0\/24 · 白名单 3\/5/);
-  assert.match(result.content, /203\.0\.113\.0\/24 · 198\.51\.100\.0\/24/);
+  assert.match(result.content, /^203\.0\.113\.0\/24 ←\n198\.51\.100\.0\/24/m);
   assert.match(result.content, /198\.51\.100\.0\/24/);
   assert.doesNotMatch(result.content, /📌|pgnfw_/);
   assert.equal(result.icon, undefined);
   assert.equal(notifications.length, 0);
 });
 
-test('compact detail outputs all five API whitelist entries in four lines', async () => {
+test('single-token detail emits every full IP on its own short line', async () => {
   const { result } = await run({
     trigger: 'button', panel: true,
     responses: { pgnfw_one: { status: 200, body: status(5) } },
   });
-  assert.equal(result.content.split('\n').length, 4);
+  assert.equal(result.content.split('\n').length, 5);
   for (const ip of status(5).whitelist.map((entry) => entry.ip)) {
-    assert.equal(result.content.split(ip).length - 1, ip === status(5).currentIp ? 2 : 1);
+    assert.equal(result.content.split(ip).length - 1, 1);
   }
+  assert.ok(result.content.split('\n').every((line) => line.length <= 20));
 });
 
 test('successive button taps toggle display while both still add; auto refresh resets it', async () => {
@@ -103,7 +103,7 @@ test('successive button taps toggle display while both still add; auto refresh r
   const second = await run(options);
   assert.equal(first.calls[0].method, 'POST');
   assert.equal(second.calls[0].method, 'POST');
-  assert.match(first.result.content, /出口 203\.0\.113\.0\/24 · 白名单 3\/5/);
+  assert.match(first.result.content, /^203\.0\.113\.0\/24 ←\n198\.51\.100\.0\/24/m);
   assert.match(second.result.content, /白名单占用 3\/5/);
   assert.doesNotMatch(second.result.content, /198\.51\.100/);
   assert.equal(storage.po0_fw_panel_detail, '0');
@@ -113,7 +113,7 @@ test('successive button taps toggle display while both still add; auto refresh r
   assert.equal(automatic.calls[0].method, 'GET');
   assert.equal(storage.po0_fw_panel_detail, '0');
   const afterAuto = await run(options);
-  assert.match(afterAuto.result.content, /出口 203\.0\.113\.0\/24 · 白名单 3\/5/);
+  assert.match(afterAuto.result.content, /^203\.0\.113\.0\/24 ←\n198\.51\.100\.0\/24/m);
 });
 
 test('automatic panel refresh summarizes three tokens', async () => {
