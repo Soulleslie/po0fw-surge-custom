@@ -195,19 +195,6 @@ function getArgumentTokens() {
   return "";
 }
 
-function getArgumentIntervalMinutes() {
-  if (typeof $argument !== "string") return "";
-  var pairs = $argument.replace(/^["']|["']$/g, "").split("&");
-  for (var i = 0; i < pairs.length; i++) {
-    var idx = pairs[i].indexOf("=");
-    if (idx > 0 && pairs[i].slice(0, idx) === "interval_minutes") {
-      var value = decodeURIComponent(pairs[i].slice(idx + 1));
-      return /^\d+$/.test(value) ? value : "";
-    }
-  }
-  return "";
-}
-
 function onCellular() {
   try {
     var iface =
@@ -355,33 +342,6 @@ function describe(index, ctx) {
   return head + "✅ " + st.whitelist.length + "/" + st.limit + "\n    " + ips;
 }
 
-function panelSummary(results, okCount, exitIp) {
-  var allOk = okCount === results.length;
-  var now = new Date();
-  var hour = ("0" + now.getHours()).slice(-2);
-  var minute = ("0" + now.getMinutes()).slice(-2);
-  var interval = getArgumentIntervalMinutes();
-  var lines = ["出口：" + (exitIp === "?" ? "未知" : exitIp) + (onCellular() ? " 📶" : "")];
-  lines.push("本次检查：" + hour + ":" + minute + (interval ? " · 每 " + interval + " 分钟" : ""));
-
-  results.forEach(function (ctx, index) {
-    var st = ctx.st;
-    var pin = ctx.slot !== null && ctx.slot !== undefined && ctx.slot !== "" ? " 📌" + ctx.slot : "";
-    var head = "#" + (index + 1) + pin + " ";
-    if (st.error) lines.push(head + "❌ " + st.error);
-    else if (st.enabled === false) lines.push(head + "⚠️ 防火墙未启用");
-    else {
-      var usage = (st.whitelist || []).length + "/" + (st.limit == null ? "?" : st.limit);
-      lines.push(head + (st.applied ? "✅ 已加白" : "❌ 当前出口未加白") + " · " + usage);
-    }
-  });
-
-  return {
-    title: "po0 防火墙 " + (allOk ? "✅ " : "⚠️ ") + okCount + "/" + results.length,
-    content: lines.join("\n"),
-  };
-}
-
 // 分隔符兼容 , | ; 、；非 pgnfw_ 开头的段（如未修改的占位提示）直接忽略。
 // 每段可带可选 @槽位 后缀：pgnfw_xxx@0 → 钉槽位 0；无后缀则 slotless。
 var tokens = (getArgumentTokens() || storeRead(TOKENS_KEY) || INLINE_TOKENS || "")
@@ -398,8 +358,6 @@ var tokens = (getArgumentTokens() || storeRead(TOKENS_KEY) || INLINE_TOKENS || "
     var n = parseInt(s.slice(at + 1), 10);
     return { token: s.slice(0, at), slot: isNaN(n) ? null : n };
   });
-
-var isPanelRun = typeof $input !== "undefined" && $input && $input.purpose === "panel";
 
 if (tokens.length === 0) {
   notify(
@@ -442,12 +400,7 @@ if (tokens.length === 0) {
     if (changed || !allOk) {
       notify("po0 防火墙加白", title, content);
     }
-    if (isPanelRun) {
-      var panel = panelSummary(results, okCount, exitIp);
-      finish(panel.title, panel.content, allOk);
-    } else {
-      finish(title, content, allOk);
-    }
+    finish(title, content, allOk);
   }).catch(function (e) {
     notify("po0 防火墙加白", "脚本异常", String(e && e.message ? e.message : e));
     finish("po0 加白：脚本异常", String(e && e.message ? e.message : e), false);
