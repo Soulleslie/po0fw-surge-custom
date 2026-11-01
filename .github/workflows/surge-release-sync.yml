@@ -6,12 +6,14 @@ on:
       - "scripts/po0-firewall-whitelist.js"
       - "scripts/surge-release.py"
       - "surge/po0-firewall-whitelist.sgmodule"
+      - "tests/test-surge-panel.js"
       - ".github/workflows/surge-release-sync.yml"
   pull_request:
     paths:
       - "scripts/po0-firewall-whitelist.js"
       - "scripts/surge-release.py"
       - "surge/po0-firewall-whitelist.sgmodule"
+      - "tests/test-surge-panel.js"
       - ".github/workflows/surge-release-sync.yml"
 
 permissions:
@@ -26,3 +28,5 @@ jobs:
           fetch-depth: 0
       - name: Check pinned Surge script
         run: python3 scripts/surge-release.py check
+      - name: Test Surge panel and triggers
+        run: node --test tests/test-surge-panel.js
