@@ -36,7 +36,11 @@ Surge / Loon / Stash / Quantumult X / Shadowrocket / Egern 六客户端脚本模
 
 在 Surge 中进入「模块 → po0 防火墙自动加白 → 编辑参数」，填写 `tokens` 和必填的 `interval_minutes`。时间只填数字，例如 `15` 表示每 15 分钟，`60` 表示每小时。可选值：`1`、`2`、`3`、`4`、`5`、`6`、`10`、`12`、`15`、`20`、`30`、`60`。这些数字都能整除 60，可保证跨整点的间隔一致。模块中也写有修改时间的路径。安装时请使用上面的本仓库链接；原版一键安装页仍指向上游模块。
 
+Surge 模块的 cron、网络事件和面板统一引用本仓库同一个固定提交的脚本。修改 `scripts/po0-firewall-whitelist.js` 后，先提交脚本，再运行 `python3 scripts/surge-release.py pin HEAD` 更新模块中的三个引用，并提交模块。将这两个提交一起推送；CI 会检查三个引用一致，且固定提交中的脚本与当前脚本完全相同。通过 PR 发布时请使用 **Create a merge commit**，以保留被引用的脚本提交；squash merge 和 rebase merge 会改写提交 ID，合并后需在主分支重新执行 `pin HEAD` 并推送修正。
+
 其他客户端的原版一键安装页：<https://po0fw.uuuz.de/>
+
+下方 Linux、OpenWrt、Windows 安装命令和其他客户端模块中的脚本链接使用 `w0ven/po0fw` 上游版本。修改本仓库的副本不会自动更新这些安装入口；要发布这些平台的改动，需同步上游或把对应链接改为本仓库。
 
 | 客户端 | 载体 | token 配置 |
 |---|---|---|
