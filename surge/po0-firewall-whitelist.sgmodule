@@ -13,7 +13,7 @@ IP-CIDR,124.221.69.228/32,DIRECT,no-resolve
 # 修改时间路径：Surge → 模块 → po0 防火墙自动加白 → 编辑参数 → interval_minutes（只填数字）
 po0-fw-cron = type=cron,cronexp="*/{{{interval_minutes}}} * * * *",script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/main/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
 po0-fw-event = type=event,event-name=network-changed,script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/main/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
-po0-fw-panel = type=generic,script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/main/scripts/po0-firewall-whitelist.js?v=panel-summary-1,timeout=60,argument="tokens={{{tokens}}}&interval_minutes={{{interval_minutes}}}"
+po0-fw-panel = type=generic,script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/main/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
 
 [Panel]
-po0-fw = script-name=po0-fw-panel,title=po0 防火墙状态,content=点击刷新查看状态,update-interval=300
+po0-fw = script-name=po0-fw-panel,title=po0 防火墙加白,content=点击刷新,update-interval=300
