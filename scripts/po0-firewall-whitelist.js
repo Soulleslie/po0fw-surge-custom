@@ -3,17 +3,20 @@
  * 兼容：Surge / Stash / Shadowrocket / Loon / Quantumult X
  * （Egern 运行模型不同，用独立的 egern/po0-firewall-whitelist.js）
  *
- * POST /api/firewall/<token>/add  把"当前请求源 IP"加入白名单，并回显
+ * cron / 网络事件 / 面板手动刷新：POST /api/firewall/<token>/add，
+ * 面板自动刷新：GET /api/firewall/<token>，只查询状态，不写入白名单。
+ * POST 把"当前请求源 IP"加入白名单，并回显
  *   {enabled, whitelist:[{ip,slot}], limit, currentIp}。token 走 URL 路径，无需
  *   Authorization 头。服务端对已在白名单的 IP 做幂等处理（重复请求不
- *   重复占坑、不推进淘汰队列），因此这里每次直接无脑请求。
+ *   重复占坑、不推进淘汰队列），因此写入触发可直接请求。
  * 加白粒度为 C 段（/24）：服务端把 whitelist 条目和 currentIp 都归一化成
  *   x.x.x.0/24 回显；同段内换 IP 不产生新写入。脚本用 sameC24() 做匹配，
  *   兼容精确 IP 与 /24 段混杂的新旧格式。
  * 白名单写满后按写入时间先进先出自动淘汰最旧 IP；API 无删除接口。
  *
  * 策略：
- * - 每次直接 POST 上报当前出口 IP，蜂窝与 WiFi/有线同等处理。
+ * - cron、网络事件和面板手动刷新直接 POST 上报当前出口 IP，蜂窝与 WiFi/有线同等处理。
+ * - Surge 面板自动刷新只 GET 查询，不加白，也不弹系统通知。
  * - 默认 slotless 写入：按 updated_at 触发 LRU 淘汰，被挤出的设备靠自己的
  *   cron/事件几分钟内自动补回。
  * - 可选固定槽位：token 后加 @N（如 pgnfw_xxx@0）→ POST .../add?slot=N，
@@ -33,7 +36,7 @@
 
 var INLINE_TOKENS = "";
 
-var API_BASE = "https://124.221.69.228/api/firewall/"; // + <token> + "/add"
+var API_BASE = "https://124.221.69.228/api/firewall/"; // + <token> [+ "/add"]
 var STORE_PREFIX = "po0_fw_";
 var TOKENS_KEY = "po0fw_tokens";
 var HIST_WINDOW_MS = 24 * 3600 * 1000; // 📶 标记的记账窗口
@@ -53,6 +56,10 @@ try {
 } catch (e) {}
 
 var isLoon = typeof $loon !== "undefined" || envInfo.indexOf("loon") >= 0;
+var isPanel =
+  typeof $input !== "undefined" && $input && $input.purpose === "panel";
+var isAutoPanel =
+  isPanel && typeof $trigger !== "undefined" && $trigger === "auto-interval";
 var isSurgeFamily =
   envInfo.indexOf("surge-version") >= 0 ||
   envInfo.indexOf("shadowrocket") >= 0 ||
@@ -249,20 +256,21 @@ function readHistory(key) {
   }
 }
 
-function apiCall(token, slot) {
-  // token 走 URL 路径，命中 /add 即把当前出口 IP 加白；带 slot 则钉固定槽位
-  var url = API_BASE + encodeURIComponent(token) + "/add";
-  if (slot !== null && slot !== undefined && slot !== "") {
+function apiCall(token, slot, readOnly) {
+  // token 走 URL 路径；自动面板只读，其他触发命中 /add 加白
+  var url = API_BASE + encodeURIComponent(token);
+  if (!readOnly) url += "/add";
+  if (!readOnly && slot !== null && slot !== undefined && slot !== "") {
     url += "?slot=" + encodeURIComponent(slot);
   }
-  var opts = {
-    url: url,
-    headers: { "Content-Type": "application/json" },
-    body: "",
-  };
+  var opts = { url: url };
+  if (!readOnly) {
+    opts.headers = { "Content-Type": "application/json" };
+    opts.body = "";
+  }
   if (REQUEST_TIMEOUT !== null) opts.timeout = REQUEST_TIMEOUT;
 
-  return httpRequest("POST", opts).then(function (r) {
+  return httpRequest(readOnly ? "GET" : "POST", opts).then(function (r) {
     if (r.error) return { error: r.error };
     var data = null;
     try {
@@ -275,6 +283,9 @@ function apiCall(token, slot) {
         conflict: true,
         currentIp: data && data.currentIp,
       };
+    }
+    if (typeof r.status === "number" && (r.status < 200 || r.status >= 300)) {
+      return { error: "HTTP " + r.status + "：" + String((data && data.message) || r.body || "请求失败").slice(0, 80) };
     }
     if (!data) return { error: "响应异常: " + String(r.body).slice(0, 80) };
     // whitelist 元素为 {ip, slot} 对象（旧版曾是纯 IP 字符串）：记下 ip→slot 再摊平成 IP 数组
@@ -289,7 +300,7 @@ function apiCall(token, slot) {
       return e && typeof e === "object" ? e.ip : e;
     });
     data.applied =
-      data.enabled === true &&
+      (readOnly ? data.enabled !== false : data.enabled === true) &&
       data.whitelist.some(function (ip) {
         return sameC24(ip, data.currentIp);
       });
@@ -297,15 +308,15 @@ function apiCall(token, slot) {
   });
 }
 
-function ensureWhitelisted(item, index) {
+function ensureWhitelisted(item, index, readOnly) {
   var kvState = STORE_PREFIX + index;
   var kvHist = STORE_PREFIX + "hist_" + index;
   var cellular = onCellular();
   var ctx = { kvState: kvState, kvHist: kvHist, slot: item.slot };
 
-  // 服务端对重复 IP 幂等，直接请求 /add 即可，无需先查
-  return apiCall(item.token, item.slot).then(function (st) {
-    if (st.applied) {
+  // 写入触发直接请求 /add；面板自动刷新只查询
+  return apiCall(item.token, item.slot, readOnly).then(function (st) {
+    if (!readOnly && st.applied) {
       var hist = readHistory(kvHist);
       var last = hist.length ? hist[hist.length - 1] : null;
       if (!last || last.ip !== st.currentIp) {
@@ -342,6 +353,47 @@ function describe(index, ctx) {
   return head + "✅ " + st.whitelist.length + "/" + st.limit + "\n    " + ips;
 }
 
+function panelTime() {
+  var now = new Date();
+  var hours = now.getHours();
+  var minutes = now.getMinutes();
+  return (hours < 10 ? "0" : "") + hours + ":" + (minutes < 10 ? "0" : "") + minutes;
+}
+
+function panelLine(index, ctx, detailed, single) {
+  var st = ctx.st;
+  var head = single ? "" : "#" + (index + 1) + " ";
+  if (st.error) return head + "❌ " + st.error;
+  if (st.enabled === false) return head + "⚠️ 防火墙未启用";
+  var count = st.whitelist.length + "/" + st.limit;
+  if (!st.applied) return head + "❌ 当前出口未加白 · 白名单 " + count;
+  if (!detailed) return single ? "白名单占用 " + count : head + "已加白 · 占用 " + count;
+
+  var lines = [head + "白名单 " + count];
+  st.whitelist.forEach(function (ip) {
+    lines.push("  " + ip + (sameC24(ip, st.currentIp) ? " ← 当前出口" : ""));
+  });
+  return lines.join("\n");
+}
+
+function panelDisplay(results, okCount, exitIp) {
+  var allOk = okCount === results.length;
+  var title =
+    "po0 防火墙 " +
+    (allOk ? "✅" : okCount > 0 ? "⚠️" : "❌") +
+    " " +
+    okCount +
+    "/" +
+    results.length;
+  var lines = ["出口 " + (exitIp === "?" ? "未知" : exitIp)];
+  var detailed = !isAutoPanel; // 面板按钮保留 POST 加白，并显示完整白名单
+  results.forEach(function (ctx, index) {
+    lines.push(panelLine(index, ctx, detailed, results.length === 1));
+  });
+  lines.push("更新 " + panelTime());
+  finish(title, lines.join("\n"), allOk);
+}
+
 // 分隔符兼容 , | ; 、；非 pgnfw_ 开头的段（如未修改的占位提示）直接忽略。
 // 每段可带可选 @槽位 后缀：pgnfw_xxx@0 → 钉槽位 0；无后缀则 slotless。
 var tokens = (getArgumentTokens() || storeRead(TOKENS_KEY) || INLINE_TOKENS || "")
@@ -360,16 +412,20 @@ var tokens = (getArgumentTokens() || storeRead(TOKENS_KEY) || INLINE_TOKENS || "
   });
 
 if (tokens.length === 0) {
-  notify(
-    "po0 防火墙加白",
-    "未配置 token",
-    "模块参数 tokens / 存储 key po0fw_tokens / 脚本内 INLINE_TOKENS 三选一填入 pgnfw_ token"
-  );
-  finish("po0 加白：未配置 token", "请填入 pgnfw_ token，多个用 | 分割", false);
+  if (isPanel) {
+    finish("po0 防火墙 ❌ 0/0", "未配置 token\n更新 " + panelTime(), false);
+  } else {
+    notify(
+      "po0 防火墙加白",
+      "未配置 token",
+      "模块参数 tokens / 存储 key po0fw_tokens / 脚本内 INLINE_TOKENS 三选一填入 pgnfw_ token"
+    );
+    finish("po0 加白：未配置 token", "请填入 pgnfw_ token，多个用 | 分割", false);
+  }
 } else {
   Promise.all(
     tokens.map(function (t, i) {
-      return ensureWhitelisted(t, i);
+      return ensureWhitelisted(t, i, isAutoPanel);
     })
   ).then(function (results) {
     var okCount = 0;
@@ -381,13 +437,20 @@ if (tokens.length === 0) {
       var st = results[i].st;
       if (st.applied) okCount++;
       if (st.currentIp) exitIp = st.currentIp;
-      lines.push(describe(i, results[i]));
+      if (!isPanel) lines.push(describe(i, results[i]));
 
-      var state = (st.currentIp || "?") + "|" + (st.applied ? "1" : "0");
-      if (storeRead(results[i].kvState) !== state) {
-        storeWrite(state, results[i].kvState);
-        changed = true;
+      if (!isPanel) {
+        var state = (st.currentIp || "?") + "|" + (st.applied ? "1" : "0");
+        if (storeRead(results[i].kvState) !== state) {
+          storeWrite(state, results[i].kvState);
+          changed = true;
+        }
       }
+    }
+
+    if (isPanel) {
+      panelDisplay(results, okCount, exitIp);
+      return;
     }
 
     var allOk = okCount === results.length;
@@ -402,7 +465,11 @@ if (tokens.length === 0) {
     }
     finish(title, content, allOk);
   }).catch(function (e) {
-    notify("po0 防火墙加白", "脚本异常", String(e && e.message ? e.message : e));
-    finish("po0 加白：脚本异常", String(e && e.message ? e.message : e), false);
+    var message = String(e && e.message ? e.message : e);
+    if (isPanel) finish("po0 防火墙 ❌", "脚本异常：" + message, false);
+    else {
+      notify("po0 防火墙加白", "脚本异常", message);
+      finish("po0 加白：脚本异常", message, false);
+    }
   });
 }
