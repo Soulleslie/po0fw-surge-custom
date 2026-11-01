@@ -41,6 +41,7 @@ var API_BASE = "https://124.221.69.228/api/firewall/"; // + <token> [+ "/add"]
 var STORE_PREFIX = "po0_fw_";
 var TOKENS_KEY = "po0fw_tokens";
 var PANEL_DETAIL_KEY = STORE_PREFIX + "panel_detail";
+var PANEL_TITLE = "po0 防火墙token";
 var HIST_WINDOW_MS = 24 * 3600 * 1000; // 📶 标记的记账窗口
 
 /* ---------- 环境兼容层 ---------- */
@@ -381,7 +382,7 @@ function panelLine(index, ctx, detailed, single) {
 function panelDisplay(results, okCount, exitIp) {
   var allOk = okCount === results.length;
   var title =
-    "po0 防火墙 " +
+    PANEL_TITLE + " " +
     (allOk ? "✅" : okCount > 0 ? "⚠️" : "❌") +
     " " +
     okCount +
@@ -419,7 +420,7 @@ var tokens = (getArgumentTokens() || storeRead(TOKENS_KEY) || INLINE_TOKENS || "
 
 if (tokens.length === 0) {
   if (isPanel) {
-    finish("po0 防火墙 ❌ 0/0", "未配置 token\n更新 " + panelTime(), false);
+    finish(PANEL_TITLE + " ❌ 0/0", "未配置 token\n更新 " + panelTime(), false);
   } else {
     notify(
       "po0 防火墙加白",
@@ -472,7 +473,7 @@ if (tokens.length === 0) {
     finish(title, content, allOk);
   }).catch(function (e) {
     var message = String(e && e.message ? e.message : e);
-    if (isPanel) finish("po0 防火墙 ❌", "脚本异常：" + message, false);
+    if (isPanel) finish(PANEL_TITLE + " ❌", "脚本异常：" + message, false);
     else {
       notify("po0 防火墙加白", "脚本异常", message);
       finish("po0 加白：脚本异常", message, false);
