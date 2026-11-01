@@ -62,7 +62,7 @@ test('automatic panel refresh queries one token without adding or notifying', as
   });
   assert.deepEqual(calls.map((call) => call.method), ['GET']);
   assert.match(calls[0].options.url, /\/api\/firewall\/pgnfw_one$/);
-  assert.equal(result.title, 'po0 防火墙 ✅ 1/1');
+  assert.equal(result.title, 'po0 防火墙token ✅ 1/1');
   assert.match(result.content, /出口 203\.0\.113\.0\/24\n白名单占用 3\/5/);
   assert.doesNotMatch(result.content, /198\.51\.100|📌|pgnfw_/);
   assert.equal(notifications.length, 0);
@@ -75,7 +75,7 @@ test('panel button adds current IP and shows whitelist detail', async () => {
   });
   assert.deepEqual(calls.map((call) => call.method), ['POST']);
   assert.match(calls[0].options.url, /\/api\/firewall\/pgnfw_one\/add\?slot=0$/);
-  assert.equal(result.title, 'po0 防火墙 ✅ 1/1');
+  assert.equal(result.title, 'po0 防火墙token ✅ 1/1');
   assert.match(result.content, /白名单 3\/5\n  203\.0\.113\.0\/24 ← 当前出口/);
   assert.match(result.content, /198\.51\.100\.0\/24/);
   assert.doesNotMatch(result.content, /📌|pgnfw_/);
@@ -113,7 +113,7 @@ test('automatic panel refresh summarizes three tokens', async () => {
     },
   });
   assert.deepEqual(calls.map((call) => call.method), ['GET', 'GET', 'GET']);
-  assert.equal(result.title, 'po0 防火墙 ✅ 3/3');
+  assert.equal(result.title, 'po0 防火墙token ✅ 3/3');
   assert.match(result.content, /#1 已加白 · 占用 3\/5/);
   assert.match(result.content, /#2 已加白 · 占用 4\/5/);
   assert.match(result.content, /#3 已加白 · 占用 2\/5/);
@@ -135,7 +135,7 @@ test('panel reports API failures without a success state', async () => {
     trigger: 'auto-interval', panel: true,
     responses: { pgnfw_one: { status: 400, body: { message: 'invalid token' } } },
   });
-  assert.equal(result.title, 'po0 防火墙 ❌ 0/1');
+  assert.equal(result.title, 'po0 防火墙token ❌ 0/1');
   assert.match(result.content, /HTTP 400：invalid token/);
   assert.equal(notifications.length, 0);
 });
@@ -145,6 +145,6 @@ test('disabled firewall is not displayed as whitelisted', async () => {
     trigger: 'auto-interval', panel: true,
     responses: { pgnfw_one: { status: 200, body: status(3, false) } },
   });
-  assert.equal(result.title, 'po0 防火墙 ❌ 0/1');
+  assert.equal(result.title, 'po0 防火墙token ❌ 0/1');
   assert.match(result.content, /防火墙未启用/);
 });
