@@ -23,11 +23,10 @@ function status(count = 3, enabled = true) {
   };
 }
 
-function run({ tokens = 'pgnfw_one', trigger, event, panel = false, responses = {} } = {}) {
+function run({ tokens = 'pgnfw_one', trigger, event, panel = false, responses = {}, storage = {} } = {}) {
   const calls = [];
   const notifications = [];
   const writes = [];
-  const storage = {};
   let done;
   const completed = new Promise((resolve) => { done = resolve; });
   const http = (method, options, callback) => {
@@ -67,7 +66,7 @@ test('automatic panel refresh queries one token without adding or notifying', as
   assert.match(result.content, /出口 203\.0\.113\.0\/24\n白名单占用 3\/5/);
   assert.doesNotMatch(result.content, /198\.51\.100|📌|pgnfw_/);
   assert.equal(notifications.length, 0);
-  assert.equal(writes.length, 0);
+  assert.deepEqual(writes, ['po0_fw_panel_detail']);
 });
 
 test('panel button adds current IP and shows whitelist detail', async () => {
@@ -81,6 +80,27 @@ test('panel button adds current IP and shows whitelist detail', async () => {
   assert.match(result.content, /198\.51\.100\.0\/24/);
   assert.doesNotMatch(result.content, /📌|pgnfw_/);
   assert.equal(notifications.length, 0);
+});
+
+test('successive button taps toggle display while both still add; auto refresh resets it', async () => {
+  const storage = {};
+  const options = { trigger: 'button', panel: true, storage };
+  const first = await run(options);
+  const second = await run(options);
+  assert.equal(first.calls[0].method, 'POST');
+  assert.equal(second.calls[0].method, 'POST');
+  assert.match(first.result.content, /白名单 3\/5\n  203\.0\.113\.0\/24/);
+  assert.match(first.result.content, /再点刷新显示简要/);
+  assert.match(second.result.content, /白名单占用 3\/5/);
+  assert.doesNotMatch(second.result.content, /198\.51\.100|再点刷新显示简要/);
+  assert.equal(storage.po0_fw_panel_detail, '0');
+
+  await run({ trigger: 'button', panel: true, storage });
+  const automatic = await run({ trigger: 'auto-interval', panel: true, storage });
+  assert.equal(automatic.calls[0].method, 'GET');
+  assert.equal(storage.po0_fw_panel_detail, '0');
+  const afterAuto = await run(options);
+  assert.match(afterAuto.result.content, /白名单 3\/5\n  203\.0\.113\.0\/24/);
 });
 
 test('automatic panel refresh summarizes three tokens', async () => {
