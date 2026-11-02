@@ -448,7 +448,7 @@ if (tokens.length === 0) {
       "未配置 token",
       "模块参数 tokens / 存储 key po0fw_tokens / 脚本内 INLINE_TOKENS 三选一填入 pgnfw_ token"
     );
-    finish("po0 加白：未配置 token", "请填入 pgnfw_ token，多个用 | 分割", false);
+    finish("po0 加白：未配置 token", "请填入 pgnfw_ token，多个用英文逗号分隔（Shadowrocket 用 |）", false);
   }
 } else {
   Promise.all(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep the three Surge script URLs pinned to the released script commit."""
+"""Keep the four Surge script URLs pinned to the released script commit."""
 
 import re
 import subprocess
@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/po0-firewall-whitelist.js"
 MODULE = ROOT / "surge/po0-firewall-whitelist.sgmodule"
-SCRIPT_NAMES = ("po0-fw-cron", "po0-fw-event", "po0-fw-panel")
+SCRIPT_NAMES = ("po0-fw-cron", "po0-fw-event", "po0-fw-start", "po0-fw-panel")
 URL = re.compile(
     r"https://raw\.githubusercontent\.com/Soulleslie/po0fw-surge-custom/"
     r"([0-9a-f]{40})/scripts/po0-firewall-whitelist\.js"
@@ -42,7 +42,7 @@ def module_refs():
             raise ValueError(f"unexpected script URL for {name}: {paths[0]}")
         refs.append(match.group(1))
     if len(set(refs)) != 1:
-        raise ValueError("Surge cron, event, and panel use different script commits")
+        raise ValueError("Surge cron, events, and panel use different script commits")
     return text, refs[0]
 
 
@@ -73,7 +73,7 @@ def main():
         old_path = f"/{old_ref}/scripts/po0-firewall-whitelist.js"
         new_path = f"/{new_ref}/scripts/po0-firewall-whitelist.js"
         if text.count(old_path) != len(SCRIPT_NAMES):
-            raise ValueError("expected three pinned script paths in the module")
+            raise ValueError("expected four pinned script paths in the module")
         MODULE.write_text(text.replace(old_path, new_path), encoding="utf-8")
         print(f"Updated Surge script pin: {old_ref} -> {new_ref}")
     else:
