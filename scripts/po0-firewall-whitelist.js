@@ -41,7 +41,7 @@ var API_BASE = "https://124.221.69.228/api/firewall/"; // + <token> [+ "/add"]
 var STORE_PREFIX = "po0_fw_";
 var TOKENS_KEY = "po0fw_tokens";
 var PANEL_DETAIL_KEY = STORE_PREFIX + "panel_detail";
-var PANEL_TITLE = "po0 防火墙token";
+var PANEL_TITLE = "po0 防火墙";
 var HIST_WINDOW_MS = 24 * 3600 * 1000; // 📶 标记的记账窗口
 
 /* ---------- 环境兼容层 ---------- */
