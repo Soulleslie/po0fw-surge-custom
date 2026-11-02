@@ -148,7 +148,11 @@ test('automatic panel refresh summarizes three tokens', async () => {
   assert.doesNotMatch(result.content, /📌|pgnfw_|198\.51\.100/);
 });
 
-for (const [label, options] of [['cron', {}], ['network-changed', { event: 'network-changed' }]]) {
+for (const [label, options] of [
+  ['cron', {}],
+  ['network-changed', { event: 'network-changed' }],
+  ['engine-started', { event: 'engine-started' }],
+]) {
   test(`${label} still adds and notifies on state change`, async () => {
     const { calls, notifications, result } = await run(options);
     assert.deepEqual(calls.map((call) => call.method), ['POST']);
@@ -175,4 +179,12 @@ test('disabled firewall is not displayed as whitelisted', async () => {
   });
   assert.equal(result.title, 'po0 防火墙token ❌ 0/1');
   assert.match(result.content, /防火墙未启用/);
+});
+
+test('missing token hint names comma as the separator', async () => {
+  const { result, notifications, calls } = await run({ tokens: '' });
+  assert.equal(calls.length, 0);
+  assert.equal(notifications.length, 1);
+  assert.match(result.content, /英文逗号分隔/);
+  assert.doesNotMatch(result.content, /多个用 \| 分割/);
 });
