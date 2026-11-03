@@ -63,7 +63,6 @@ var isPanel =
   typeof $input !== "undefined" && $input && $input.purpose === "panel";
 var isAutoPanel =
   isPanel && typeof $trigger !== "undefined" && $trigger === "auto-interval";
-var isMacPanel = isPanel && envInfo.indexOf('"system":"macos"') >= 0;
 var isSurgeFamily =
   envInfo.indexOf("surge-version") >= 0 ||
   envInfo.indexOf("shadowrocket") >= 0 ||
@@ -408,9 +407,9 @@ function panelDisplay(results, okCount, exitIp) {
   results.forEach(function (ctx, index) {
     lines.push(panelLine(index, ctx, detailed, results.length === 1));
   });
-  // Mac 菜单栏面板把较短的 content 靠下排。正常单 token 简要状态补两行
-  // 有用的信息，与 5 条 IP 明细的高度相近，避免标题和内容之间出现大块空白。
-  if (!detailed && isMacPanel && results.length === 1) {
+  // 单 token 简要状态补两行有用的信息，与 5 条 IP 明细的高度相近，
+  // 避免 Mac 面板标题和内容之间出现大块空白；iOS 显示保持一致。
+  if (!detailed && results.length === 1) {
     var st = results[0].st;
     if (!st.error && st.enabled !== false && st.applied) {
       lines.splice(1, 0, "防火墙 已启用");
