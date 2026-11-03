@@ -64,13 +64,13 @@ test('automatic panel refresh queries one token without adding or notifying', as
   assert.deepEqual(calls.map((call) => call.method), ['GET']);
   assert.match(calls[0].options.url, /\/api\/firewall\/pgnfw_one$/);
   assert.equal(result.title, 'po0 防火墙 ✅ 1/1');
-  assert.match(result.content, /出口 203\.0\.113\.0\/24\n白名单占用 3\/5/);
+  assert.match(result.content, /出口 203\.0\.113\.0\/24\n防火墙 已启用\n白名单占用 3\/5\n手动刷新：加白并看明细/);
   assert.doesNotMatch(result.content, /198\.51\.100|📌|pgnfw_/);
   assert.equal(notifications.length, 0);
   assert.deepEqual(writes, ['po0_fw_panel_detail']);
 });
 
-test('Mac summary emits five useful lines', async () => {
+test('Mac and iOS summaries emit the same five lines', async () => {
   const { result, calls } = await run({
     system: 'macOS', trigger: 'auto-interval', panel: true,
     responses: { pgnfw_one: { status: 200, body: status(5) } },
@@ -83,6 +83,11 @@ test('Mac summary emits five useful lines', async () => {
     '手动刷新：加白并看明细',
   ]);
   assert.equal(result.content.split('\n').length, 5);
+  const ios = await run({
+    trigger: 'auto-interval', panel: true,
+    responses: { pgnfw_one: { status: 200, body: status(5) } },
+  });
+  assert.equal(ios.result.content.split('\n').slice(0, 4).join('\n'), result.content.split('\n').slice(0, 4).join('\n'));
 });
 
 test('panel button adds current IP and shows whitelist detail', async () => {
