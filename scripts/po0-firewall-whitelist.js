@@ -149,27 +149,33 @@ function delay(ms) {
 var HTTP_RETRY = 3;
 var HTTP_RETRY_DELAY_MS = 1500;
 
-// 服务端瞬时异常也值得重试：po0 API 偶发返回裸 400（body 仅 "Error"）/ 5xx，
-// 几秒后同一 token 即成功。规范 JSON 错误（如 token 无效 {"code":400,...}）不重试。
-function isRetryableServerError(r) {
-  if (!r || !r.status) return false;
-  if (r.status >= 500) return true;
-  if (r.status >= 200 && r.status < 300) return false;
-  if (r.status === 403) return false; // 槽位冲突，重试无意义
+function parseResponseBody(body) {
   try {
-    JSON.parse(r.body);
-    return false; // 规范 JSON 错误 = 确定性失败，不重试
+    return JSON.parse(body);
   } catch (e) {
-    return true; // 非 JSON body（如裸 "Error"）= 服务端瞬时异常
+    return null;
   }
+}
+
+function responseErrorStatus(status, data) {
+  if (status && (status < 200 || status >= 300)) return Number(status);
+  return data && typeof data.code === "number" && data.code >= 400 ? data.code : 0;
+}
+
+// 偶发的裸 400、限流和 5xx 可重试；明确的参数错误和槽位冲突直接报告。
+function isRetryableServerError(r) {
+  if (r.errorStatus === 429 || r.errorStatus >= 500) return true;
+  return !!r.errorStatus && r.errorStatus !== 403 && r.data === null;
 }
 
 function httpRequest(method, opts, attempt) {
   attempt = attempt || 1;
   return httpRequestOnce(method, opts).then(function (r) {
+    r.data = parseResponseBody(r.body);
+    r.errorStatus = responseErrorStatus(r.status, r.data);
     if (!r.error && !isRetryableServerError(r)) return r;
     if (attempt >= HTTP_RETRY) {
-      if (r.error) r.error = r.error + "（已重试 " + HTTP_RETRY + " 次）";
+      r.attempts = attempt;
       return r;
     }
     return delay(HTTP_RETRY_DELAY_MS * attempt).then(function () {
@@ -182,27 +188,52 @@ function getArgumentTokens() {
   if (typeof $argument === "undefined" || $argument === null) return "";
   // Loon 插件 argument=[{tokens}] 会注入对象形态
   if (typeof $argument === "object") return String($argument.tokens || "");
-  if (typeof $argument === "string" && $argument.length > 0) {
+  if (typeof $argument === "string") {
+    var arg = $argument.trim();
     // Shadowrocket 等客户端可能把配置里的外层引号原样传入，先剥掉
-    if (/^["'].*["']$/.test($argument)) $argument = $argument.slice(1, -1);
+    if (/^(["'])[\s\S]*\1$/.test(arg)) arg = arg.slice(1, -1).trim();
     // Loon 也可能注入 JSON 字符串
-    if ($argument.charAt(0) === "{") {
+    if (arg.charAt(0) === "{") {
       try {
-        return String(JSON.parse($argument).tokens || "");
+        return String(JSON.parse(arg).tokens || "");
       } catch (e) {}
     }
     // Surge/Stash 风格 tokens=xxx&...
-    var pairs = $argument.split("&");
+    var pairs = arg.split("&");
     for (var i = 0; i < pairs.length; i++) {
       var idx = pairs[i].indexOf("=");
-      if (idx > 0 && pairs[i].slice(0, idx) === "tokens") {
-        return decodeURIComponent(pairs[i].slice(idx + 1));
+      if (idx > 0 && pairs[i].slice(0, idx).trim() === "tokens") {
+        var value = pairs[i].slice(idx + 1).trim();
+        try {
+          return decodeURIComponent(value);
+        } catch (e) {
+          return value;
+        }
       }
     }
     // 直接把整串当 token 填的兜底（如 Loon argument="pgnfw_..."）
-    if ($argument.indexOf("pgnfw_") === 0) return $argument;
+    if (arg.indexOf("pgnfw_") === 0) return arg;
   }
   return "";
+}
+
+function parseTokenEntries(raw) {
+  return String(raw || "")
+    .split(/[,，|;、\s]+/)
+    .filter(function (entry) {
+      return entry.indexOf("pgnfw_") === 0;
+    })
+    .map(function (entry) {
+      var at = entry.indexOf("@");
+      var token = at < 0 ? entry : entry.slice(0, at);
+      if (!/^pgnfw_[A-Za-z0-9_-]+$/.test(token)) {
+        return { error: "token 格式无效" };
+      }
+      if (at < 0) return { token: token, slot: null };
+      var slot = entry.slice(at + 1);
+      if (!/^\d+$/.test(slot)) return { error: "槽位无效（须填数字，如 @0）" };
+      return { token: token, slot: slot.replace(/^0+(?=\d)/, "") };
+    });
 }
 
 function onCellular() {
@@ -275,23 +306,24 @@ function apiCall(token, slot, readOnly) {
   if (REQUEST_TIMEOUT !== null) opts.timeout = REQUEST_TIMEOUT;
 
   return httpRequest(readOnly ? "GET" : "POST", opts).then(function (r) {
-    if (r.error) return { error: r.error };
-    var data = null;
-    try {
-      data = JSON.parse(r.body);
-    } catch (e) {}
+    var attempts = r.attempts ? "（已尝试 " + r.attempts + " 次）" : "";
+    if (r.error) return { error: r.error + attempts };
+    var data = r.data;
     // 带槽位写入且本机 IP 已占用别的槽位 → 服务端 403 冲突，需去 UI 删旧槽位
-    if (r.status === 403) {
+    if (r.errorStatus === 403 && !readOnly && slot !== null) {
       return {
         error: "槽位冲突：本机 IP 已在其它槽位，请先去 UI 删除",
         conflict: true,
         currentIp: data && data.currentIp,
       };
     }
-    if (typeof r.status === "number" && (r.status < 200 || r.status >= 300)) {
-      return { error: "HTTP " + r.status + "：" + String((data && data.message) || r.body || "请求失败").slice(0, 80) };
+    if (r.errorStatus) {
+      var reason = (data && (data.message || data.error)) || String(r.body || "").trim() || "请求失败";
+      return { error: "HTTP " + r.errorStatus + "：" + String(reason).slice(0, 80) + attempts };
     }
-    if (!data) return { error: "响应异常: " + String(r.body).slice(0, 80) };
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return { error: "响应异常: " + String(r.body).slice(0, 80) };
+    }
     // whitelist 元素为 {ip, slot} 对象（旧版曾是纯 IP 字符串）：记下 ip→slot 再摊平成 IP 数组
     var raw = Array.isArray(data.whitelist) ? data.whitelist : [];
     data.slotOf = {};
@@ -317,6 +349,10 @@ function ensureWhitelisted(item, index, readOnly) {
   var kvHist = STORE_PREFIX + "hist_" + index;
   var cellular = onCellular();
   var ctx = { kvState: kvState, kvHist: kvHist, slot: item.slot };
+  if (item.error) {
+    ctx.st = { error: item.error };
+    return Promise.resolve(ctx);
+  }
 
   // 写入触发直接请求 /add；面板自动刷新只查询
   return apiCall(item.token, item.slot, readOnly).then(function (st) {
@@ -421,22 +457,7 @@ function panelDisplay(results, okCount, exitIp) {
   finish(title, lines.join("\n"), allOk);
 }
 
-// 分隔符兼容 , | ; 、；非 pgnfw_ 开头的段（如未修改的占位提示）直接忽略。
-// 每段可带可选 @槽位 后缀：pgnfw_xxx@0 → 钉槽位 0；无后缀则 slotless。
-var tokens = (getArgumentTokens() || storeRead(TOKENS_KEY) || INLINE_TOKENS || "")
-  .split(/[,|;、\s]+/)
-  .map(function (s) {
-    return s.trim();
-  })
-  .filter(function (s) {
-    return s.indexOf("pgnfw_") === 0;
-  })
-  .map(function (s) {
-    var at = s.indexOf("@");
-    if (at === -1) return { token: s, slot: null };
-    var n = parseInt(s.slice(at + 1), 10);
-    return { token: s.slice(0, at), slot: isNaN(n) ? null : n };
-  });
+var tokens = parseTokenEntries(getArgumentTokens() || storeRead(TOKENS_KEY) || INLINE_TOKENS);
 
 if (tokens.length === 0) {
   if (isPanel) {

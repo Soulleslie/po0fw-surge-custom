@@ -33,7 +33,9 @@ function run({ tokens = 'pgnfw_one', trigger, event, panel = false, system = 'iO
   const http = (method, options, callback) => {
     calls.push({ method, options });
     const token = decodeURIComponent(options.url.split('/api/firewall/')[1].split('/')[0]);
-    const reply = responses[token] || { status: 200, body: status() };
+    const configured = responses[token];
+    const reply = (Array.isArray(configured) ? configured.shift() : configured) ||
+      { status: 200, body: status() };
     callback(null, { status: reply.status }, JSON.stringify(reply.body));
   };
   const context = {
@@ -168,13 +170,62 @@ for (const [label, options] of [
 }
 
 test('panel reports API failures without a success state', async () => {
-  const { result, notifications } = await run({
+  const { result, calls, notifications } = await run({
     trigger: 'auto-interval', panel: true,
     responses: { pgnfw_one: { status: 400, body: { message: 'invalid token' } } },
   });
   assert.equal(result.title, 'po0 防火墙 ❌ 0/1');
   assert.match(result.content, /HTTP 400：invalid token/);
+  assert.equal(calls.length, 1);
   assert.equal(notifications.length, 0);
+});
+
+test('valid token entries still run when another token or slot is invalid', async () => {
+  const { result, calls } = await run({
+    tokens: 'pgnfw_badslot@1abc，pgnfw_good@00，pgnfw_bad%',
+    trigger: 'button', panel: true,
+  });
+  assert.deepEqual(calls.map((call) => call.method), ['POST']);
+  assert.match(calls[0].options.url, /\/pgnfw_good\/add\?slot=0$/);
+  assert.equal(result.title, 'po0 防火墙 ⚠️ 1/3');
+  assert.match(result.content, /#1 ❌ 槽位无效/);
+  assert.match(result.content, /#3 ❌ token 格式无效/);
+  assert.doesNotMatch(result.content, /pgnfw_/);
+});
+
+test('automatic refresh retries HTTP 429 and continues using GET', async () => {
+  const { result, calls, notifications } = await run({
+    trigger: 'auto-interval', panel: true,
+    responses: {
+      pgnfw_one: [
+        { status: 429, body: { message: 'rate limited' } },
+        { status: 200, body: status() },
+      ],
+    },
+  });
+  assert.deepEqual(calls.map((call) => call.method), ['GET', 'GET']);
+  assert.equal(result.title, 'po0 防火墙 ✅ 1/1');
+  assert.equal(notifications.length, 0);
+});
+
+test('server errors indicate when all attempts are exhausted', async () => {
+  const { result, calls } = await run({
+    trigger: 'button', panel: true,
+    responses: { pgnfw_one: { status: 503, body: { error: 'service unavailable' } } },
+  });
+  assert.deepEqual(calls.map((call) => call.method), ['POST', 'POST', 'POST']);
+  assert.equal(result.title, 'po0 防火墙 ❌ 0/1');
+  assert.match(result.content, /HTTP 503：service unavailable（已尝试 3 次）/);
+});
+
+test('an API error code inside HTTP 200 is reported without a retry', async () => {
+  const { result, calls } = await run({
+    trigger: 'auto-interval', panel: true,
+    responses: { pgnfw_one: { status: 200, body: { code: 400, error: 'invalid token' } } },
+  });
+  assert.deepEqual(calls.map((call) => call.method), ['GET']);
+  assert.equal(result.title, 'po0 防火墙 ❌ 0/1');
+  assert.match(result.content, /HTTP 400：invalid token/);
 });
 
 test('disabled firewall is not displayed as whitelisted', async () => {
