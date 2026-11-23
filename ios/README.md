@@ -2,11 +2,9 @@
 
 ## 方案一：代理客户端脚本模块（推荐给代理用户）
 
-如果你在用 Surge / Loon / Stash / Quantumult X / Shadowrocket / Egern，直接用群友 reallinzc 的成熟模块，带面板显示、蜂窝标记、network-changed 即时触发：
+如果你在用 Surge，可以安装本仓库的自定义定时模块。导入后填写 `tokens` 和 `interval_minutes`，例如填 `15` 表示每 15 分钟加白。已安装的用户可直接刷新模块。[Surge 安装与参数说明](../README.md#ios--mac-代理客户端模块)
 
-👉 **[po0fw iOS 版](https://po0fw.rlyio.com/)**（开源：[reallinzc/po0fw](https://github.com/reallinzc/po0fw)）
-
-本仓库不重复造这个轮子。
+Loon、Stash、Quantumult X、Shadowrocket 和 Egern 用户可用[上游一键安装页](https://po0fw.uuuz.de/)选择对应模块。
 
 ## 方案二：快捷指令（不用任何代理 App）
 

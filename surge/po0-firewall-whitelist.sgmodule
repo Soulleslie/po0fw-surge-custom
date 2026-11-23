@@ -1,9 +1,9 @@
 #!name=po0 防火墙自动加白
-#!desc=Surge 启动、定时与网络切换时自动加白；面板自动刷新只查询状态，点击刷新会加白并在明细与简要状态间切换。支持多 token（英文逗号分割，对应多台机器）。
+#!desc=Surge 启动、定时与网络切换时自动加白；面板自动刷新只查询状态，点击刷新会加白并切换显示。限流或瞬时失败时会重试。
 #!category=po0
 #!author=reallinzc
 #!arguments=tokens:"",interval_minutes
-#!arguments-desc=tokens 填 pgnfw_ 开头的 API token（多台机器用英文逗号分隔，可加 @槽位，如 pgnfw_xxx@0）；interval_minutes 只填分钟数字，可选 1、2、3、4、5、6、10、12、15、20、30、60，填 15 即每 15 分钟。修改路径：Surge → 模块 → po0 防火墙自动加白 → 编辑参数 → interval_minutes
+#!arguments-desc=tokens 填 pgnfw_ 开头的 API token（多台机器用英文逗号或中文逗号分隔，固定槽位用 @ 后接数字，如 pgnfw_xxx@0）；interval_minutes 只填分钟数字，可选 1、2、3、4、5、6、10、12、15、20、30、60，填 15 即每 15 分钟。修改路径：Surge → 模块 → po0 防火墙自动加白 → 编辑参数 → interval_minutes
 
 [Rule]
 # 加白 API 必须直连，确保 API 看到的是本机真实出口 IP 而不是代理出口
