@@ -1,5 +1,5 @@
 #!name=po0 防火墙自动加白
-#!desc=Surge 启动、定时与网络切换时自动加白；面板自动刷新只查询状态，点击刷新会加白并切换显示。限流或瞬时失败时会重试。
+#!desc=Surge 启动、定时与网络切换时自动加白；面板自动刷新只查询状态，手动刷新会加白并逐页显示明细。限流或瞬时失败时会重试。
 #!category=po0
 #!author=reallinzc
 #!arguments=tokens:"",interval_minutes
@@ -12,10 +12,10 @@ IP-CIDR,124.221.69.228/32,DIRECT,no-resolve
 [Script]
 # po0-fw-start：Surge 引擎启动完成后立即加白一次（需 iOS 5.22.0+ / Mac 6.9.0+，旧版本不会触发这一行）
 # 修改时间路径：Surge → 模块 → po0 防火墙自动加白 → 编辑参数 → interval_minutes（只填数字）
-po0-fw-cron = type=cron,cronexp="*/{{{interval_minutes}}} * * * *",script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/dfd82a83b4355866e39dd7499debdec2437129dc/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
-po0-fw-event = type=event,event-name=network-changed,script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/dfd82a83b4355866e39dd7499debdec2437129dc/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
-po0-fw-start = type=event,event-name=engine-started,script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/dfd82a83b4355866e39dd7499debdec2437129dc/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
-po0-fw-panel = type=generic,script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/dfd82a83b4355866e39dd7499debdec2437129dc/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
+po0-fw-cron = type=cron,cronexp="*/{{{interval_minutes}}} * * * *",script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/fa01e0014425ecd754aae19ac80c14cdf7af8ae8/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
+po0-fw-event = type=event,event-name=network-changed,script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/fa01e0014425ecd754aae19ac80c14cdf7af8ae8/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
+po0-fw-start = type=event,event-name=engine-started,script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/fa01e0014425ecd754aae19ac80c14cdf7af8ae8/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
+po0-fw-panel = type=generic,script-path=https://raw.githubusercontent.com/Soulleslie/po0fw-surge-custom/fa01e0014425ecd754aae19ac80c14cdf7af8ae8/scripts/po0-firewall-whitelist.js,timeout=60,argument="tokens={{{tokens}}}"
 
 [Panel]
-po0-fw = script-name=po0-fw-panel,title=po0 防火墙,content=点击刷新并加白，再点切换简要,update-interval=300
+po0-fw = script-name=po0-fw-panel,title=po0 防火墙,content=点击刷新并加白，再点翻页,update-interval=300
