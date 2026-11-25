@@ -155,6 +155,54 @@ test('automatic panel refresh summarizes three tokens', async () => {
   assert.doesNotMatch(result.content, /📌|pgnfw_|198\.51\.100/);
 });
 
+test('three token details show one machine per tap before returning to summary', async () => {
+  const tokens = ['pgnfw_one', 'pgnfw_two', 'pgnfw_three'];
+  const networks = ['203.0.113', '198.51.100', '192.0.2'];
+  const responses = Object.fromEntries(tokens.map((token, index) => {
+    const ips = [1, 2, 3, 4, 5].map((host) => networks[index] + '.' + host);
+    return [token, {
+      status: 200,
+      body: { ...status(), currentIp: ips[0], whitelist: ips.map((ip) => ({ ip })) },
+    }];
+  }));
+  const options = { tokens: tokens.join(','), trigger: 'button', panel: true, responses, storage: {} };
+
+  for (let index = 0; index < tokens.length; index++) {
+    const { result, calls } = await run(options);
+    assert.equal(result.title, 'po0 防火墙 · #' + (index + 1) + '/3');
+    const ips = responses[tokens[index]].body.whitelist.map(({ ip }) => ip);
+    assert.deepEqual(result.content.split('\n'), [ips[0] + ' ←', ...ips.slice(1)]);
+    assert.deepEqual(calls.map((call) => call.method), ['POST', 'POST', 'POST']);
+  }
+  const summary = await run(options);
+  assert.equal(summary.result.title, 'po0 防火墙 ✅ 3/3');
+  assert.match(summary.result.content, /#3 已加白 · 占用 5\/5/);
+  assert.deepEqual(summary.calls.map((call) => call.method), ['POST', 'POST', 'POST']);
+
+  await run(options);
+  const automatic = await run({ ...options, trigger: 'auto-interval' });
+  assert.equal(automatic.result.title, summary.result.title);
+  assert.deepEqual(automatic.calls.map((call) => call.method), ['GET', 'GET', 'GET']);
+  const restarted = await run(options);
+  assert.equal(restarted.result.title, 'po0 防火墙 · #1/3');
+});
+
+test('a whitelist with more than five IPs continues on the next page', async () => {
+  const whitelist = status(5).whitelist.concat([{ ip: '192.0.5.0/24' }, { ip: '192.0.6.0/24' }]);
+  const options = {
+    trigger: 'button', panel: true, storage: {},
+    responses: { pgnfw_one: { status: 200, body: { ...status(), limit: 7, whitelist } } },
+  };
+  const first = await run(options);
+  const second = await run(options);
+  assert.equal(first.result.title, 'po0 防火墙 ✅ 1/1 · 1/2');
+  assert.equal(second.result.title, 'po0 防火墙 ✅ 1/1 · 2/2');
+  assert.deepEqual(first.result.content.split('\n'), [
+    whitelist[0].ip + ' ←', ...whitelist.slice(1, 5).map(({ ip }) => ip),
+  ]);
+  assert.equal(second.result.content, '192.0.5.0/24\n192.0.6.0/24');
+});
+
 for (const [label, options] of [
   ['cron', {}],
   ['network-changed', { event: 'network-changed' }],
@@ -181,16 +229,19 @@ test('panel reports API failures without a success state', async () => {
 });
 
 test('valid token entries still run when another token or slot is invalid', async () => {
-  const { result, calls } = await run({
+  const options = {
     tokens: 'pgnfw_badslot@1abc，pgnfw_good@00，pgnfw_bad%',
-    trigger: 'button', panel: true,
-  });
-  assert.deepEqual(calls.map((call) => call.method), ['POST']);
-  assert.match(calls[0].options.url, /\/pgnfw_good\/add\?slot=0$/);
-  assert.equal(result.title, 'po0 防火墙 ⚠️ 1/3');
-  assert.match(result.content, /#1 ❌ 槽位无效/);
-  assert.match(result.content, /#3 ❌ token 格式无效/);
-  assert.doesNotMatch(result.content, /pgnfw_/);
+    trigger: 'button', panel: true, storage: {},
+  };
+  const first = await run(options);
+  const second = await run(options);
+  const third = await run(options);
+  assert.deepEqual(first.calls.map((call) => call.method), ['POST']);
+  assert.match(first.calls[0].options.url, /\/pgnfw_good\/add\?slot=0$/);
+  assert.match(first.result.content, /❌ 槽位无效/);
+  assert.match(second.result.content, /203\.0\.113\.0\/24 ←/);
+  assert.match(third.result.content, /❌ token 格式无效/);
+  assert.doesNotMatch(first.result.content + third.result.content, /pgnfw_/);
 });
 
 test('automatic refresh retries HTTP 429 and continues using GET', async () => {
