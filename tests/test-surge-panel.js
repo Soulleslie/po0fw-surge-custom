@@ -187,6 +187,24 @@ test('three token details show one machine per tap before returning to summary',
   assert.equal(restarted.result.title, 'po0 防火墙 · #1/3');
 });
 
+test('one-IP detail pages show status and the next refresh action', async () => {
+  const singleIp = { status: 200, body: status(1) };
+  const options = {
+    tokens: 'pgnfw_one,pgnfw_two', trigger: 'button', panel: true, system: 'macOS',
+    responses: { pgnfw_one: singleIp, pgnfw_two: singleIp }, storage: {},
+  };
+  for (const [page, action] of [[1, '点刷新看下一页'], [2, '点刷新返回简要']]) {
+    const { result } = await run(options);
+    assert.equal(result.title, 'po0 防火墙 · #' + page + '/2');
+    const lines = result.content.split('\n');
+    assert.deepEqual(lines.slice(0, 4), [
+      '203.0.113.0/24 ←', '防火墙 已启用', '白名单占用 1/5', action,
+    ]);
+    assert.match(lines[4], /^更新 \d{2}:\d{2}$/);
+    assert.equal(lines.length, 5);
+  }
+});
+
 test('a whitelist with more than five IPs continues on the next page', async () => {
   const whitelist = status(5).whitelist.concat([{ ip: '192.0.5.0/24' }, { ip: '192.0.6.0/24' }]);
   const options = {
@@ -200,7 +218,7 @@ test('a whitelist with more than five IPs continues on the next page', async () 
   assert.deepEqual(first.result.content.split('\n'), [
     whitelist[0].ip + ' ←', ...whitelist.slice(1, 5).map(({ ip }) => ip),
   ]);
-  assert.equal(second.result.content, '192.0.5.0/24\n192.0.6.0/24');
+  assert.match(second.result.content, /^192\.0\.5\.0\/24\n192\.0\.6\.0\/24\n白名单占用 7\/7\n点刷新返回简要\n更新 /);
 });
 
 for (const [label, options] of [

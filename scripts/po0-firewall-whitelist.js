@@ -419,7 +419,7 @@ function panelDetailPages(results, summaryTitle) {
     if (st.error || st.enabled === false || !st.applied) {
       pages.push({
         title: title,
-        content: "出口 " + (st.currentIp || "未知") + "\n" + panelSummaryLine(index, ctx, true),
+        lines: ["出口 " + (st.currentIp || "未知"), panelSummaryLine(index, ctx, true)],
       });
       return;
     }
@@ -431,9 +431,14 @@ function panelDetailPages(results, summaryTitle) {
       var lines = st.whitelist.slice(start, start + PANEL_DETAIL_PAGE_SIZE).map(function (ip) {
         return ip + (sameC24(ip, st.currentIp) ? " ←" : "");
       });
+      // Surge 的正文靠卡片底部。明细较短时用剩余行显示状态和操作提示。
+      if (lines.length === 1) lines.push("防火墙 已启用");
+      if (lines.length < PANEL_DETAIL_PAGE_SIZE - 1) {
+        lines.push("白名单占用 " + st.whitelist.length + "/" + st.limit);
+      }
       pages.push({
         title: pageCount === 1 ? title : title + " · " + (page + 1) + "/" + pageCount,
-        content: lines.join("\n"),
+        lines: lines,
       });
     }
   });
@@ -452,10 +457,18 @@ function panelDisplay(results, okCount, exitIp) {
   // 手动刷新已经执行 POST。逐页显示明细，翻完或自动刷新时回到简要。
   if (!isAutoPanel) {
     var nextPage = Number(storeRead(PANEL_DETAIL_KEY) || 0);
-    var detail = panelDetailPages(results, title)[nextPage];
+    var pages = panelDetailPages(results, title);
+    var detail = pages[nextPage];
     if (detail) {
-      storeWrite(String(nextPage + 1), PANEL_DETAIL_KEY);
-      finish(detail.title, detail.content, allOk);
+      nextPage++;
+      if (detail.lines.length < PANEL_DETAIL_PAGE_SIZE) {
+        detail.lines.push(nextPage < pages.length ? "点刷新看下一页" : "点刷新返回简要");
+      }
+      if (detail.lines.length < PANEL_DETAIL_PAGE_SIZE) {
+        detail.lines.push("更新 " + panelTime());
+      }
+      storeWrite(String(nextPage), PANEL_DETAIL_KEY);
+      finish(detail.title, detail.lines.join("\n"), allOk);
       return;
     }
   }
